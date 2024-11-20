@@ -297,26 +297,30 @@ def create_diag():
     connection = con_db()
     cursor = connection.cursor()
     try:
+        cursor.execute("SELECT MAX(diagnostico_id) FROM diagnosticos")
+        max_id = cursor.fetchone()[0]
+        diagnostico_id = (max_id + 1) if max_id else 1 
         query = """INSERT INTO diagnosticos 
-                   (paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado_revision) 
-                   VALUES (%s, %s, %s, %s, %s)"""
-        cursor.execute(query, (paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado_revision))
+                   (diagnostico_id, paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado_revision) 
+                   VALUES (%s, %s, %s, %s, %s, %s)"""
+        cursor.execute(query, (diagnostico_id, paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado_revision))
         connection.commit()
-        print("Diagnóstico creado con exito.")
+        print("Diagnóstico creado con éxito.")
         diag_doc = {
-                "paciente_id": paciente_id,
-                "tipo_imagen": tipo_imagen,
-                "resultado_ia": resultado_ia,
-                "fecha_diagnostico": fecha_diagnostico,
-                "estado_revision": estado_revision
-            }
+            "diagnostico_id": diagnostico_id,
+            "paciente_id": paciente_id,
+            "tipo_imagen": tipo_imagen,
+            "resultado_ia": resultado_ia,
+            "fecha_diagnostico": fecha_diagnostico,
+            "estado_revision": estado_revision
+        }
         db = con_mongodb()
         rep_colection=db["reportes"]
         reporte = rep_colection.find_one({"paciente_id": paciente_id})
         if reporte:
             rep_colection.insert_one({
             "paciente_id": paciente_id,
-            "diagnosticos": [diag_doc]})
+            "diagnosticos": diag_doc})
             print("Diagnóstico sincronizado con MongoDB.")
         else:
             print(f"No se encontró un reporte con el paciente_id: {paciente_id}. Se procede a crearse un nuevo reporte con el diagnóstico")
@@ -438,3 +442,125 @@ def act_diag():
     finally:
         cursor.close()
         connection.close()
+def del_diag():
+    diagnostico_id = rev_num("Ingrese el ID del diagnóstico a eliminar: ")
+    connection = con_db()
+    cursor = connection.cursor()
+    try:
+        query = "DELETE FROM diagnosticos WHERE diagnostico_id = %s"
+        cursor.execute(query, (diagnostico_id,))
+        connection.commit()
+        print("Diagnóstico eliminado con éxito en MySQL.")
+        db= con_mongodb()
+        rep_colection=db["reportes"]
+        if rep_colection:
+            resultado = rep_colection.delete_one({"_id": diagnostico_id})
+            if resultado.deleted_count > 0:
+                print("Diagnóstico eliminado con éxito en MongoDB.")
+            else:
+                print("No se encontró el diagnóstico en MongoDB.")
+    except Exception as e:
+        print(f"Error al eliminar el diagnóstico: {e}")
+    finally:
+        cursor.close()
+        connection.close()
+def create_reporte():
+    db = con_mongodb()
+    rep_colection = db["reportes"]
+    if rep_colection:
+        reporte_id = rev_num("Ingrese el ID del reporte: ")
+        reporte = rep_colection.find_one({"id_reporte": reporte_id})
+        if reporte:
+            print("Este reporte ya existe.")
+        else:
+            paciente_id = rev_num("Ingrese el ID del paciente: ")
+            medico_id = rev_num("Ingrese el ID del médico que genera el reporte: ")
+            fecha_reporte = rev_fecha("Ingrese la fecha del reporte (YYYY-MM-DD): ")
+            diagnosticos = []
+            notas_adicionales = []
+            print("¿Deseas ingresar un diagnóstico? (1. Sí / 2. No)")
+            opc = rev_num("Selecciona una opción: ")
+            if opc == 1:
+                connection = con_db()
+                cursor = connection.cursor()
+                try:
+                    while True:
+                        print("\n=== Añadir Diagnóstico ===")
+                        id_diagnostico = rev_num("Ingrese el ID del diagnóstico: ")
+                        cursor.execute("SELECT 1 FROM diagnosticos WHERE diagnostico_id = %s", (id_diagnostico,))
+                        if cursor.fetchone():
+                            print(f"El diagnóstico con ID {id_diagnostico} ya existe. Use otro ID.")
+                            continue
+                        print("1. MRI\n2. CT\n3. Rayos X")
+                        num_img = rev_num("Ingrese el tipo de imagen: ")
+                        tipo_imagen = ["MRI", "CT", "Rayos X"][num_img - 1] if 1 <= num_img <= 3 else None
+                        parte_cuerpo = input("Ingrese la parte del cuerpo: ")
+                        condicion_sugerida = input("Ingrese la condición sugerida por IA: ")
+                        probabilidad = rev_num("Ingrese la probabilidad del análisis IA (%): ")
+                        notas_ia = input("Ingrese las notas del análisis de IA: ")
+                        comentarios_medico = input("Ingrese comentarios del médico sobre el diagnóstico: ")
+                        print("1. Pendiente\n2. Confirmado\n3. Descartado")
+                        estado_diagnostico = ["Pendiente", "Confirmado", "Descartado"][int(input("Ingrese el estado del diagnóstico: ")) - 1]
+                        diag_doc = {
+                            "id_diagnostico": id_diagnostico,
+                            "tipo_imagen": tipo_imagen,
+                            "parte_cuerpo": parte_cuerpo,
+                            "analisis_IA": {
+                                "condicion_sugerida": condicion_sugerida,
+                                "probabilidad_%": probabilidad,
+                                "notas": notas_ia
+                            },
+                            "comentarios_medico": comentarios_medico,
+                            "estado_diagnostico": estado_diagnostico
+                        }
+                        diagnosticos.append(diag_doc)
+                        query = """INSERT INTO diagnosticos 
+                                   (diagnostico_id, paciente_id, tipo_imagen, parte_cuerpo, condicion_sugerida, 
+                                   probabilidad, notas_ia, comentarios_medico, estado_diagnostico) 
+                                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                        cursor.execute(query, (id_diagnostico, paciente_id, tipo_imagen, parte_cuerpo, condicion_sugerida,
+                                               probabilidad, notas_ia, comentarios_medico, estado_diagnostico))
+                        connection.commit()
+                        print(f"Diagnóstico {id_diagnostico} creado exitosamente en MySQL y preparado para MongoDB.")
+                        cont = rev_num("¿Desea añadir otro diagnóstico? (1. Sí / 2. No): ")
+                        if cont != 1:
+                            break
+                except Exception as e:
+                    print(f"Error al insertar diagnóstico: {e}")
+                finally:
+                    cursor.close()
+                    connection.close()
+            print("¿Deseas ingresar una nota adicional? (1. Sí / 2. No): ")
+            opc1 = rev_num("Selecciona una opción: ")
+            if opc1 == 1:
+                while True:
+                    print("\n=== Añadir Nota Adicional ===")
+                    id_nota = rev_num("Ingrese el ID de la nota: ")
+                    fecha_nota = rev_fecha("Ingrese la fecha de la nota (YYYY-MM-DD): ")
+                    texto = input("Ingrese el texto de la nota: ")
+                    notas_adicionales.append({
+                        "id_nota": id_nota,
+                        "fecha_nota": fecha_nota,
+                        "texto": texto
+                    })
+                    cont = rev_num("¿Desea añadir otra nota? (1. Sí / 2. No): ")
+                    if cont != 1:
+                        break
+            conclusiones = input("Ingrese las conclusiones del médico: ")
+            recomendaciones = input("Ingrese las recomendaciones del médico: ")
+            reporte_doc = {
+                "id_reporte": reporte_id,
+                "id_paciente": paciente_id,
+                "id_medico": medico_id,
+                "fecha_reporte": fecha_reporte,
+                "diagnosticos": diagnosticos,
+                "notas_adicionales": notas_adicionales,
+                "conclusiones": conclusiones,
+                "recomendaciones": recomendaciones
+            }
+            try:
+                rep_colection.insert_one(reporte_doc)
+                print("Reporte creado exitosamente en MongoDB.")
+            except Exception as e:
+                print(f"Error al crear el reporte en MongoDB: {e}")
+
