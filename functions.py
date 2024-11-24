@@ -564,3 +564,32 @@ def create_reporte():
             except Exception as e:
                 print(f"Error al crear el reporte en MongoDB: {e}")
 
+#Esta se va a encargar de devolver el ID del paciente o un none para hacer el submenú del punto 6
+def ver_pac():
+    while True:
+        paciente_id=rev_num("Ingrese el ID del paciente: ")
+        connection = con_db()
+        cursor = connection.cursor()
+        try:
+            query = "SELECT * FROM pacientes WHERE paciente_id = %s"
+            cursor.execute(query, (paciente_id,))
+            re = cursor.fetchone()
+            if re:
+                return paciente_id
+            else:
+                return None
+        except Exception as e:
+            print(f"Error al leer el paciente: {e}")
+        finally:
+            cursor.close()
+            connection.close()
+#Este va a ser el submenú del punto 6, aún no está terminado, porque necesito saber como está estructurada la información de la base de datos :(.
+def search_pac():
+    while True:
+       msj=("Ingrese una opción: \n1. Ver historial de diagnósticos. \n2. Consultar imágenes asociadas. \n==============\n")
+       x = rev_num(msj)
+       if x==1:
+           ID=ver_pac()
+           if ID != None:
+               
+
