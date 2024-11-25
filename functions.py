@@ -5,8 +5,93 @@ db_config = {
     "host": "localhost",
     "user": "informatica1",
     "password": "info20242",
-    "database": "Informatica1_PF"
 }
+def ini_mysql():
+    db_name = "Informatica1_PF"
+    ex_tab= ["usuarios", "pacientes", "diagnosticos"]
+    data_inserts = {
+        "usuarios": [
+            ("Miguel_Iglesia", "KarateKid", "tecnico"),
+            ("Franchesca_01", "12_Reinaldo", "medico"),
+            ("Apolit0", "Bell000", "administrador")
+        ],
+        "pacientes": [
+            ("Juan Perez", 35, "Masculino"),
+            ("Maria Lopez", 28, "Femenino")
+        ],
+        "diagnosticos": [
+            (1, "MRI", "Glioblastoma multiforme", "2024-05-14", "No"),
+            (2, "CT", "Fractura craneal", "2024-05-13", "Si")
+        ]
+    }
+    create_tab_ = {
+        "usuarios": """
+            CREATE TABLE usuarios (
+                user_id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                role ENUM('administrador', 'medico', 'tecnico') NOT NULL
+            );
+        """,
+        "pacientes": """
+            CREATE TABLE pacientes (
+                paciente_id INT AUTO_INCREMENT PRIMARY KEY,
+                nombre VARCHAR(100) NOT NULL,
+                edad INT NOT NULL,
+                genero ENUM('Masculino', 'Femenino') NOT NULL,
+            );
+        """,
+        "diagnosticos": """
+            CREATE TABLE diagnosticos (
+                diagnostico_id INT AUTO_INCREMENT PRIMARY KEY,
+                paciente_id INT NOT NULL,
+                tipo_imagen ENUM('MRI', 'CT', 'Rayos X') NOT NULL,
+                resultado_ia VARCHAR(255) NOT NULL,
+                fecha_diagnostico DATE NOT NULL,
+                estado ENUM('Si', 'No') NOT NULL,
+            );
+        """
+    }
+    try:
+        con = mysql.connector.connect(**db_config)
+        cursor = con.cursor()
+        cursor.execute("SHOW DATABASES;")
+        databases = [db[0] for db in cursor.fetchall()]
+        if db_name in databases:
+            print(f"La base de datos '{db_name}' existe.")
+        else:
+            print(f"La base de datos '{db_name}' no existe. Creandola...")
+            cursor.execute(f"CREATE DATABASE {db_name};")
+            print(f"La Base de datos '{db_name}' ha sido creada exitosamente.")
+        cursor.execute(f"USE {db_name};")
+        cursor.execute("SHOW TABLES;")
+        existing_tables = [table[0] for table in cursor.fetchall()]
+
+        for t in ex_tab:
+            if t in existing_tables:
+                print(f"La tabla '{t}' ya existe.")
+            else:
+                print(f"La tabla '{t}' no existe. Creándola...")
+                cursor.execute(create_tab_[t])
+                print(f"Tabla '{t}' creada exitosamente.")
+                for i in data_inserts[t]:
+                    if t == "usuarios":
+                        cursor.execute("INSERT INTO usuarios (username, password, role) VALUES (%s, %s, %s)", row)
+                    elif t == "pacientes":
+                        cursor.execute("INSERT INTO pacientes (nombre, edad, genero, historial_diagnosticos) VALUES (%s, %s, %s, %s)", row)
+                    elif t == "diagnosticos":
+                        cursor.execute("INSERT INTO diagnosticos (paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado) VALUES (%s, %s, %s, %s, %s)", row)
+
+                print(f"Datos insertados en la tabla '{t}'.")
+        con.commit()
+    except mysql.connector.Error as err:
+        print(f"Error de MySQL: {err.msg} (Código: {err.errno})")
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'conn' in locals():
+            con.close()
+
 def con_mongodb():
     client = MongoClient("mongodb://localhost:27017/")
     return client["sistema_medico"]
@@ -84,22 +169,33 @@ def create_pac():
         cursor.close()
         connection.close()
 def read_pac():
-    paciente_id=rev_num("Ingrese el ID del paciente: ")
+    paciente_id = rev_num("Ingrese el ID del paciente: ")
     connection = con_db()
     cursor = connection.cursor()
     try:
-        query = "SELECT * FROM pacientes WHERE paciente_id = %s"
-        cursor.execute(query, (paciente_id,))
-        re = cursor.fetchone()
-        if re:
-            print(f"Paciente encontrado:\nID: {re[0]}\nNombre: {re[1]}\nEdad: {re[2]}\nGénero: {re[3]}")
+        query_paciente = "SELECT * FROM pacientes WHERE paciente_id = %s"
+        cursor.execute(query_paciente, (paciente_id,))
+        paciente = cursor.fetchone()
+        if paciente:
+            print(f"Paciente encontrado:\nID: {paciente[0]}\nNombre: {paciente[1]}\nEdad: {paciente[2]}\nGénero: {paciente[3]}")
+            query_diagnosticos = "SELECT * FROM diagnosticos WHERE paciente_id = %s"
+            cursor.execute(query_diagnosticos, (paciente_id,))
+            diagnosticos = cursor.fetchall()
+
+            if diagnosticos:
+                print("\nHistorial de Diagnósticos:")
+                for diag in diagnosticos:
+                    print(f"ID Diagnóstico: {diag[0]}\nTipo de Imagen: {diag[2]}\nResultado IA: {diag[3]}\nFecha: {diag[4]}\nEstado: {diag[5]}\n")
+            else:
+                print("No se encontraron diagnósticos para este paciente.")
         else:
             print("Paciente no encontrado.")
     except Exception as e:
-        print(f"Error al leer el paciente: {e}")
+        print(f"Error al leer el paciente o el historial de diagnósticos: {e}")
     finally:
         cursor.close()
         connection.close()
+
 def act_pac():
     paciente_id=rev_num("Ingrese el ID del paciente:")
     connection = con_db()
@@ -141,9 +237,11 @@ def act_pac():
         cursor.close()
         connection.close()
 def del_pac():
-    paciente_id=rev_num("Ingrese el ID del paciente: ")
+    paciente_id = rev_num("Ingrese el ID del paciente: ")
     connection = con_db()
     cursor = connection.cursor()
+    db = con_mongodb()
+    rep_colection = db["reportes"] 
     try:
         query = "SELECT * FROM pacientes WHERE paciente_id = %s"
         cursor.execute(query, (paciente_id,))
@@ -152,15 +250,30 @@ def del_pac():
             print("Paciente no encontrado en MySQL.")
             return
         else:
-            query = "DELETE FROM pacientes WHERE paciente_id = %s"
-            cursor.execute(query, (paciente_id,))
-            connection.commit()
-            print("Paciente eliminado con éxito en MySQL.")
+            con = rev_num(f"¿Está seguro de eliminar al paciente {result[1]} y sus diagnósticos? (1. Si 2. No): ").strip().lower()
+            if con ==2:
+                print("Operación cancelada.")
+                return
+            elif con !=1:
+                print("Ingrese una opción válida.")
+                return
+            else:
+                query_diag = "DELETE FROM diagnosticos WHERE paciente_id = %s"
+                cursor.execute(query_diag, (paciente_id,))
+                print("Diagnósticos eliminados con éxito.")
+                query_pac = "DELETE FROM pacientes WHERE paciente_id = %s"
+                cursor.execute(query_pac, (paciente_id,))
+                connection.commit()
+                print("Paciente eliminado con éxito en MySQL, junto con sus diagnósticos.")
+                rep_colection.delete_one({"id_paciente": paciente_id})
+                print("Reporte asociado al paciente eliminado con éxito en MongoDB.")
+        
     except Exception as e:
-        print(f"Error al eliminar el paciente: {e}")
+        print(f"Error al eliminar el paciente, sus diagnósticos o el reporte en MongoDB: {e}")
     finally:
         cursor.close()
         connection.close()
+
 def create_user():
     username = input("Ingrese el nombre de usuario: ").strip()
     password = input("Ingrese la contraseña: ").strip()
@@ -548,6 +661,7 @@ def create_reporte():
                         break
             conclusiones = input("Ingrese las conclusiones del médico: ")
             recomendaciones = input("Ingrese las recomendaciones del médico: ")
+            notas_tec={}
             reporte_doc = {
                 "id_reporte": reporte_id,
                 "id_paciente": paciente_id,
@@ -556,13 +670,150 @@ def create_reporte():
                 "diagnosticos": diagnosticos,
                 "notas_adicionales": notas_adicionales,
                 "conclusiones": conclusiones,
-                "recomendaciones": recomendaciones
+                "recomendaciones": recomendaciones,
+                "notas _tecnicas": notas_tec
             }
             try:
                 rep_colection.insert_one(reporte_doc)
                 print("Reporte creado exitosamente en MongoDB.")
             except Exception as e:
                 print(f"Error al crear el reporte en MongoDB: {e}")
+def act_reporte():
+    db = con_mongodb()
+    rep_colection = db["reportes"]
+    reporte_id = rev_num("Ingrese el ID del reporte a actualizar: ")
+    reporte = rep_colection.find_one({"id_reporte": reporte_id})
+    if not reporte:
+        print("Reporte no encontrado.")
+        return
+    else:
+        print("Reporte encontrado. Información actual del reporte:")
+        print(f"ID del reporte: {reporte['id_reporte']}")
+        print(f"Paciente ID: {reporte['id_paciente']}")
+        print(f"Médico ID: {reporte['id_medico']}")
+        print(f"Fecha del reporte: {reporte['fecha_reporte']}")
+        print("Diagnósticos actuales:")
+        for diag in reporte["diagnosticos"]:
+            print(f"\n=== Diagnóstico ID: {diag['id_diagnostico']} ===")
+            print(f"Comentarios médicos: {diag['comentarios_medico']}")
+            print(f"Estado del diagnóstico: {diag['estado_diagnostico']}")
+            print("===")
+        print("1. Comentarios y estado de diagnostico.\n2.Notas adicionales\n3.Conclusiones y recomendaciones")
+        opc = rev_num("Seleccione la opción de actualización : ")
+        if opc == 1:
+            diagnostico_id = rev_num("Ingrese el ID del diagnóstico a actualizar: ")
+            diagnostico = next((d for d in reporte["diagnosticos"] if d["id_diagnostico"] == diagnostico_id), None)
+            if not diagnostico:
+                print(f"No se encontró el diagnóstico con ID {diagnostico_id}.")
+                return
+            else:
+                print(f"Detalles actuales del diagnóstico {diagnostico_id}:")
+                print(f"Tipo de imagen: {diag['tipo_imagen']}")
+                print(f"Parte del cuerpo: {diag['parte_cuerpo']}")
+                print(f"Condición sugerida por IA: {diag['analisis_IA']['condicion_sugerida']}")
+                print(f"Probabilidad del análisis IA: {diag['analisis_IA']['probabilidad_%']}%")
+                print(f"Notas del análisis IA: {diag['analisis_IA']['notas']}")
+                print(f"Comentarios médicos: {diagnostico['comentarios_medico']}")
+                print(f"Estado del diagnóstico: {diagnostico['estado_diagnostico']}")
+                new_come = input("Ingrese el nuevo comentario del médico (deje en blanco para no modificar): ")
+                new_est = input("Ingrese el nuevo estado del diagnóstico (deje en blanco para no modificar): ")
+                if new_come:
+                    diagnostico['comentarios_medico'] = new_come
+                if new_est:
+                    diagnostico['estado_diagnostico'] = new_est
+                rep_colection.update_one(
+                    {"id_reporte": reporte_id, "diagnosticos.id_diagnostico": diagnostico_id},
+                    {"$set": {
+                        "diagnosticos.$.comentarios_medico": diagnostico['comentarios_medico'],
+                        "diagnosticos.$.estado_diagnostico": diagnostico['estado_diagnostico']
+                    }}
+                )
+                print(f"Diagnóstico {diagnostico_id} actualizado con exito.")
+        elif opc == 2:
+            new_nota_id = rev_num("Ingrese el ID de la nueva nota: ")
+            fecha_nota = rev_fecha("Ingrese la fecha de la nota (YYYY-MM-DD): ")
+            text_nota = input("Ingrese el texto de la nota: ")
+            rep_colection.update_one(
+                {"id_reporte": reporte_id},
+                {"$push": {
+                    "notas_adicionales": {
+                        "id_nota": new_nota_id,
+                        "fecha_nota": fecha_nota,
+                        "texto": text_nota
+                    }
+                }}
+            )
+            print("Nota adicional agregada con éxito.")
+        elif opc == 3:
+            new_conc = input("Ingrese las nuevas conclusiones del médico: ")
+            new_reco = input("Ingrese las nuevas recomendaciones del médico: ")
+            rep_colection.update_one(
+                {"id_reporte": reporte_id},
+                {"$set": {
+                    "conclusiones": new_conc,
+                    "recomendaciones": new_reco
+                }}
+            )
+            print("Conclusiones y recomendaciones actualizadas con éxito.")
+        else:
+            print("Opción no válida.")
+def add_nota_tec(user_id):
+    db = con_mongodb()
+    rep_colection = db["reportes"]
+    reporte_id = rev_num("Ingrese el ID del reporte al que desea añadir notas técnicas: ")
+    reporte = rep_colection.find_one({"id_reporte": reporte_id})
+    if not reporte:
+        print("Reporte no encontrado.")
+        return
+    else:
+        print(f"Reporte encontrado. ID: {reporte['id_reporte']}")
+        notas_tecnicas = reporte.get("notas_tecnicas", [])
+        while True:
+            print("\n=== Añadir Nota Técnica ===")
+            id_nota_tecnica = rev_num("Ingrese el ID de la nueva nota técnica: ")
+            if any(i["id_nota_tecnica"] == id_nota_tecnica for i in notas_tecnicas):
+                print("Ya existe una nota técnica con este ID. Intente con otro.")
+                continue
+            else:
+                fecha_nota_tec = rev_fecha("Ingrese la fecha de la nota técnica (YYYY-MM-DD): ")
+                text= input("Ingrese el texto de la nota técnica: ")
+                tipo_pro = input("Ingrese el tipo de procedimiento relacionado: ")
+                while True:
+                    print("1.Alta\n2.Media\n3.Baja")
+                    pri= input("Ingrese la prioridad de la nota : ")
+                    if pri==1:
+                        prionidad="Alta"
+                        break
+                    elif pri==2:
+                        prioridad="Media"
+                        break
+                    elif pri==3:
+                        prioridad="Baja"
+                        break
+                    else:
+                        print("Ingrese una opcion valida")
+                new_nota = {
+                    "id_nota_tecnica": id_nota_tecnica,
+                    "fecha_nota_tecnica": fecha_nota_tec,
+                    "texto": text,
+                    "autor_tecnico": user_id,
+                    "tipo_procedimiento": tipo_pro,
+                    "prioridad": prioridad
+                }
+                notas_tecnicas.append(new_nota)
+                print(f"La nota técnica con ID {id_nota_tecnica} fue añadida exitosamente.")
+                continuar = rev_num("¿Desea añadir otra nota técnica? (1. Sí 2. No): ")
+                if continuar != 1:
+                    break
+            try:
+                rep_colection.update_one(
+                    {"id_reporte": reporte_id},
+                    {"$set": {"notas_tecnicas": notas_tecnicas}}
+                )
+                print("Notas técnicas añadidas exitosamente al reporte.")
+            except Exception as e:
+                print(f"Error al actualizar las notas técnicas en el reporte: {e}")
+
 
 #Esta se va a encargar de devolver el ID del paciente o un none para hacer el submenú del punto 6
 def ver_pac():
