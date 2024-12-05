@@ -76,11 +76,11 @@ def ini_mysql():
                 print(f"Tabla '{t}' creada exitosamente.")
                 for i in data_inserts[t]:
                     if t == "usuarios":
-                        cursor.execute("INSERT INTO usuarios (username, password, role) VALUES (%s, %s, %s)", row)
+                        cursor.execute("INSERT INTO usuarios (username, password, role) VALUES (%s, %s, %s)", i)
                     elif t == "pacientes":
-                        cursor.execute("INSERT INTO pacientes (nombre, edad, genero, historial_diagnosticos) VALUES (%s, %s, %s, %s)", row)
+                        cursor.execute("INSERT INTO pacientes (nombre, edad, genero, historial_diagnosticos) VALUES (%s, %s, %s, %s)", i)
                     elif t == "diagnosticos":
-                        cursor.execute("INSERT INTO diagnosticos (paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado) VALUES (%s, %s, %s, %s, %s)", row)
+                        cursor.execute("INSERT INTO diagnosticos (paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado) VALUES (%s, %s, %s, %s, %s)", i)
 
                 print(f"Datos insertados en la tabla '{t}'.")
         con.commit()
