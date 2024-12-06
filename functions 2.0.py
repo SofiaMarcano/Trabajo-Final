@@ -6,9 +6,23 @@ db_config = {
     "user": "informatica1",
     "password": "info20242",
 }
+def rango(min_val, max_val, msj, u):
+    while True:
+        try:
+            valor = float(input(f"{msj} ({u}, rango {min_val}-{max_val}): "))
+            if min_val <= valor <= max_val:
+                return valor
+            print(f"El valor debe estar entre {min_val} y {max_val}.")
+        except ValueError:
+            print("Por favor, ingrese un número válido.")
+from pymongo import MongoClient
+import mysql.connector
 def ini_mysql():
-    db_name = "Informatica1_PF"
-    ex_tab= ["usuarios", "pacientes", "diagnosticos"]
+    """
+    Crea e inicializa la base de datos en MySQL con datos iniciales.
+    """
+    db_name = "SistemaMedico"
+    ex_tab = ["usuarios", "pacientes", "diagnosticos"]
     data_inserts = {
         "usuarios": [
             ("Miguel_Iglesia", "KarateKid", "tecnico"),
@@ -16,15 +30,15 @@ def ini_mysql():
             ("Apolit0", "Bell000", "administrador")
         ],
         "pacientes": [
-            ("Juan Perez", 35, "Masculino"),
-            ("Maria Lopez", 28, "Femenino")
+            (1, "Juan Perez", 35, "Masculino"),
+            (2, "Maria Lopez", 28, "Femenino")
         ],
         "diagnosticos": [
             (1, "MRI", "Glioblastoma multiforme", "2024-05-14", "No"),
             (2, "CT", "Fractura craneal", "2024-05-13", "Si")
         ]
     }
-    create_tab_ = {
+    create_tab = {
         "usuarios": """
             CREATE TABLE usuarios (
                 user_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -35,10 +49,10 @@ def ini_mysql():
         """,
         "pacientes": """
             CREATE TABLE pacientes (
-                paciente_id INT AUTO_INCREMENT PRIMARY KEY,
+                paciente_id INT PRIMARY KEY,
                 nombre VARCHAR(100) NOT NULL,
                 edad INT NOT NULL,
-                genero ENUM('Masculino', 'Femenino') NOT NULL,
+                genero ENUM('Masculino', 'Femenino') NOT NULL
             );
         """,
         "diagnosticos": """
@@ -49,49 +63,53 @@ def ini_mysql():
                 resultado_ia VARCHAR(255) NOT NULL,
                 fecha_diagnostico DATE NOT NULL,
                 estado ENUM('Si', 'No') NOT NULL,
+                FOREIGN KEY (paciente_id) REFERENCES pacientes(paciente_id)
             );
         """
     }
+
     try:
-        con = mysql.connector.connect(**db_config)
-        cursor = con.cursor()
+        conexion = mysql.connector.connect(**db_config)
+        cursor = conexion.cursor()
         cursor.execute("SHOW DATABASES;")
         databases = [db[0] for db in cursor.fetchall()]
-        if db_name in databases:
-            print(f"La base de datos '{db_name}' existe.")
-        else:
-            print(f"La base de datos '{db_name}' no existe. Creandola...")
+
+        if db_name not in databases:
+            print(f"La base de datos '{db_name}' no existe. Creándola...")
             cursor.execute(f"CREATE DATABASE {db_name};")
-            print(f"La Base de datos '{db_name}' ha sido creada exitosamente.")
+            print(f"Base de datos '{db_name}' creada exitosamente.")
+
         cursor.execute(f"USE {db_name};")
         cursor.execute("SHOW TABLES;")
         existing_tables = [table[0] for table in cursor.fetchall()]
 
-        for t in ex_tab:
-            if t in existing_tables:
-                print(f"La tabla '{t}' ya existe.")
+        for table_name in ex_tab:
+            if table_name in existing_tables:
+                print(f"La tabla '{table_name}' ya existe.")
             else:
-                print(f"La tabla '{t}' no existe. Creándola...")
-                cursor.execute(create_tab_[t])
-                print(f"Tabla '{t}' creada exitosamente.")
-                for i in data_inserts[t]:
-                    if t == "usuarios":
-                        cursor.execute("INSERT INTO usuarios (username, password, role) VALUES (%s, %s, %s)", row)
-                    elif t == "pacientes":
-                        cursor.execute("INSERT INTO pacientes (nombre, edad, genero, historial_diagnosticos) VALUES (%s, %s, %s, %s)", row)
-                    elif t == "diagnosticos":
-                        cursor.execute("INSERT INTO diagnosticos (paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado) VALUES (%s, %s, %s, %s, %s)", row)
+                print(f"La tabla '{table_name}' no existe. Creándola...")
+                cursor.execute(create_tab[table_name])
+                print(f"Tabla '{table_name}' creada exitosamente.")
 
-                print(f"Datos insertados en la tabla '{t}'.")
-        con.commit()
+        for table_name, data in data_inserts.items():
+            for record in data:
+                if table_name == "usuarios":
+                    query = "INSERT INTO usuarios (username, password, role) VALUES (%s, %s, %s);"
+                elif table_name == "pacientes":
+                    query = "INSERT INTO pacientes (paciente_id, nombre, edad, genero) VALUES (%s, %s, %s, %s);"
+                elif table_name == "diagnosticos":
+                    query = "INSERT INTO diagnosticos (paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado) VALUES (%s, %s, %s, %s, %s);"
+                cursor.execute(query, record)
+
+        conexion.commit()
+        print("Datos iniciales insertados exitosamente.")
     except mysql.connector.Error as err:
         print(f"Error de MySQL: {err.msg} (Código: {err.errno})")
     finally:
         if 'cursor' in locals():
             cursor.close()
-        if 'conn' in locals():
-            con.close()
-
+        if 'conexion' in locals():
+            conexion.close()
 def con_mongodb():
     client = MongoClient("mongodb://localhost:27017/")
     return client["sistema_medico"]
@@ -195,7 +213,6 @@ def read_pac():
     finally:
         cursor.close()
         connection.close()
-
 def act_pac():
     paciente_id=rev_num("Ingrese el ID del paciente:")
     connection = con_db()
@@ -273,7 +290,6 @@ def del_pac():
     finally:
         cursor.close()
         connection.close()
-
 def create_user():
     username = input("Ingrese el nombre de usuario: ").strip()
     password = input("Ingrese la contraseña: ").strip()
@@ -813,90 +829,43 @@ def add_nota_tec(user_id):
                 print("Notas técnicas añadidas exitosamente al reporte.")
             except Exception as e:
                 print(f"Error al actualizar las notas técnicas en el reporte: {e}")
-# Función para validar fechas en formato YYYY-MM-DD
-def rev_fecha(mensaje):
-    while True:
-        fecha = input(f"{mensaje}: ").strip()
-        try:
-            datetime.strptime(fecha, "%Y-%m-%d")
-            return fecha
-        except ValueError:
-            print("Por favor, ingrese una fecha válida en formato YYYY-MM-DD.")
-
-# Función para validar respuestas de sí o no
-def opcion_si_no(mensaje):
-    while True:
-        opcion = input(f"{mensaje} (Sí/No): ").strip().lower()
-        if opcion in ["sí", "si", "no"]:
-            return opcion.capitalize()
-        print("Por favor, responda con 'Sí' o 'No'.")
-
-# Función para validar datos alfabéticos
-def val_alf(mensaje):
-    while True:
-        entrada = input(f"{mensaje}: ").strip()
-        if all(palabra.isalpha() for palabra in entrada.split()):
-            return entrada
-        print("Por favor, ingrese solo letras.")
-
-# Función para validar datos numéricos dentro de un rango
-def rango(min_val, max_val, mensaje, unidad):
-    while True:
-        try:
-            valor = float(input(f"{mensaje} ({unidad}, rango {min_val}-{max_val}): "))
-            if min_val <= valor <= max_val:
-                return valor
-            print(f"El valor debe estar entre {min_val} y {max_val}.")
-        except ValueError:
-            print("Por favor, ingrese un número válido.")
-
-# Función principal para almacenar imágenes
 def alm_imagenes():
     id_paciente_imagen = rev_num("Ingrese el ID del paciente")
-
-    # Selección del tipo de imagen
-    print("1. MRI\n2. CT\n3. Rayos X")
     while True:
+        print("1. MRI\n2. CT\n3. Rayos X")
         num_img = rev_num("Ingresa el tipo de imagen")
         if 1 <= num_img <= 3:
             tipo_imagen = ["MRI", "CT", "Rayos X"][num_img - 1]
             break
-        print("Seleccione un número válido entre 1 y 3.")
-
-    # Fecha de la imagen
+        else:
+            print("Seleccione un número válido entre 1 y 3.")
     fecha_imagen = rev_fecha("Ingresa la fecha de la imagen (YYYY-MM-DD)")
-
-    # Resultado de IA
     resultado_IA_valor = rev_num("Ingresa el resultado preliminar del análisis por IA (en %)")
     resultado_IA = f"{resultado_IA_valor}%"
-
-    # Selección del tipo de captura
-    print("1. Digital\n2. Analógica\n3. 3D")
     while True:
-        num_captura = rev_num("Ingresa el tipo de captura")
+        print("1. Digital\n2. Analógica\n3. 3D")
+        num_captura = rev_num("Ingresa el tipo de captura: ")
         if 1 <= num_captura <= 3:
             tipo_captura = ["Digital", "Analógica", "3D"][num_captura - 1]
             break
-        print("Seleccione un número válido entre 1 y 3.")
-
-    # Contraste
-    contraste = opcion_si_no("¿En la imagen se utilizó contraste?")
-
-    # Posicionamiento del paciente
-    posicionamiento = val_alf("Describa cual fue el posicionamiento del paciente. (solo en palabras)")
-
-    # Resolución espacial
-    resolucion_espacial_valor = rango(0.01, 1.0, "Resolución espacial", "mm/píxel")
-    resolucion_espacial = f"{resolucion_espacial_valor} mm/píxel"
-
-    # Frecuencia de muestreo
-    frecuencia_muestreo_valor = rango(2, 15, "Frecuencia de muestreo", "MHz")
-    frecuencia_muestreo = f"{frecuencia_muestreo_valor} MHz"
-
-    # Zona de estudio
-    zona_estudio = val_alf("Ingresa la zona de estudio donde se realizo la imagen (alfabético, ej. Abdomen, Cabeza)")
-
-    # Estructura del documento
+        else:
+            print("Seleccione un número válido entre 1 y 3.")
+    while True:
+        cont= rev_num("¿En la imagen se utilizó contraste?(1.Si 2. No): ")
+        if cont==1:
+            contraste="Si"
+            break
+        elif cont==2:
+            contraste="No"
+            break
+        else:
+            print("Ingrese una opcion valida")
+    posi = input("Describa cual fue el posicionamiento del paciente: ")
+    res_esp_valor = rango(0.01, 1.0, "Resolución espacial", "mm/píxel")
+    res_espa = f"{res_esp_valor} mm/píxel"
+    fre_muestreo_valor = rango(2, 15, "Frecuencia de muestreo", "MHz")
+    fre_muestreo = f"{fre_muestreo_valor} MHz"
+    zona_estudio = input("Ingresa la zona de estudio donde se realizo la imagen (alfabético, ej. Abdomen, Cabeza)")
     Alm_imagenes = {
         "ID paciente": id_paciente_imagen,
         "Tipo de imagen": tipo_imagen,
@@ -905,56 +874,52 @@ def alm_imagenes():
         "Información técnica": {
             "Tipo captura": tipo_captura,
             "Contraste": contraste,
-            "Posicionamiento": posicionamiento,
-            "Resolución espacial": resolucion_espacial,
-            "Frecuencia muestreo": frecuencia_muestreo
+            "Posicionamiento": posi,
+            "Resolución espacial": res_espa,
+            "Frecuencia muestreo": fre_muestreo
         },
         "Zona de estudio": zona_estudio
     }
-
-    # Insertar en MongoDB
+    db=con_mongodb()
+    imagenes_col=db["Imagenes"]
     imagenes_col.insert_one(Alm_imagenes)
     print("La imagen y los metadatos han sido almacenados correctamente.")
-
-# Función para ver imágenes de un paciente
 def ver_imagen():
     id_paciente_imagen = rev_num("Ingresa el ID del paciente para buscar imágenes")
     filtro = {"ID paciente": id_paciente_imagen}
-
+    db=con_mongodb()
+    imagenes_col=db["Imagenes"]
     imagenes = list(imagenes_col.find(filtro))
     if not imagenes:
         print(f"No se encontraron imágenes asociadas al ID {id_paciente_imagen}.")
         return
-
-    for idx, imagen in enumerate(imagenes, start=1):
-        print(f"\n{idx}. Tipo de imagen: {imagen.get('Tipo de imagen')}, Fecha: {imagen.get('Fecha de imagen')}")
-        print(f"   Resultado IA: {imagen.get('Resultado IA')}")
-        print(f"   Información técnica:")
-        for clave, valor in imagen.get("Información técnica", {}).items():
-            print(f"      - {clave}: {valor}")
-        print(f"   Zona de estudio: {imagen.get('Zona de estudio')}")
-
-# Función para eliminar imágenes de un paciente
+    else:
+        for idx, imagen in enumerate(imagenes, start=1):
+            print(f"\n{idx}. Tipo de imagen: {imagen.get('Tipo de imagen')}, Fecha: {imagen.get('Fecha de imagen')}")
+            print(f"   Resultado IA: {imagen.get('Resultado IA')}")
+            print(f"   Información técnica:")
+            for clave, valor in imagen.get("Información técnica", {}).items():
+                print(f"      - {clave}: {valor}")
+            print(f"   Zona de estudio: {imagen.get('Zona de estudio')}")
 def eliminar_imagen():
     id_paciente_imagen = rev_num("Ingrese el ID del paciente cuyas imágenes desea eliminar")
     filtro = {"ID paciente": id_paciente_imagen}
-
+    db=con_mongodb()
+    imagenes_col=db["Imagenes"]
     imagenes = list(imagenes_col.find(filtro))
     if not imagenes:
         print(f"No se encontraron imágenes asociadas al ID {id_paciente_imagen}.")
         return
-
-    print("\nImágenes encontradas:")
-    for idx, imagen in enumerate(imagenes, start=1):
-        print(f"{idx}. Tipo: {imagen.get('Tipo de imagen')}, Fecha: {imagen.get('Fecha de imagen')}")
-
-    confirmacion = input("¿Desea eliminar todas las imágenes asociadas a este ID? (Sí/No): ").strip().lower()
-    if confirmacion in ["sí", "si"]:
-        resultado = imagenes_col.delete_many(filtro)
-        print(f"Se eliminaron {resultado.deleted_count} imagen(es).")
     else:
-        print("Operación cancelada.")
-
+        print("\nImágenes encontradas:")
+        for idx, imagen in enumerate(imagenes, start=1):
+            print(f"{idx}. Tipo: {imagen.get('Tipo de imagen')}, Fecha: {imagen.get('Fecha de imagen')}")
+        confirmacion = input("¿Desea eliminar todas las imágenes asociadas a este ID? (Sí/No): ").strip().lower()
+        if confirmacion in ["sí", "si"]:
+            resultado = imagenes_col.delete_many(filtro)
+            print(f"Se eliminaron {resultado.deleted_count} imagen(es).")
+        else:
+            print("Operación cancelada.")
 def search_pac(patient_id):
     """Busca el historial de diagnósticos de un paciente dado su ID y consulta imágenes asociadas."""
     try:
@@ -966,8 +931,6 @@ def search_pac(patient_id):
             database="Informatica1_PF"
         )
         cursor = connection.cursor(dictionary=True)
-
-        
         query = """
             SELECT * FROM diagnosticos WHERE patient_id = %s
         """
@@ -977,33 +940,31 @@ def search_pac(patient_id):
         if not diagnosticos:
             print(f"No se encontraron diagnósticos para el paciente con ID {patient_id}.")
             return []
-
-        
-        print(f"Historial de diagnósticos para el paciente con ID {patient_id}:")
-        for diag in diagnosticos:
-            print(f"  - ID: {diag['diagnosis_id']}, Fecha: {diag['diagnosis_date']}, "
-                  f"Tipo: {diag['diagnosis_type']}, Probabilidad: {diag['probability']}%, "
-                  f"Notas: {diag['preliminary_notes']}")
-
-        
-        imagenes_query = """
-            SELECT * FROM imagenes WHERE diagnosis_id IN (%s)
-        """
-        diagnosis_ids = tuple(diag["diagnosis_id"] for diag in diagnosticos)
-        cursor.execute(imagenes_query, (diagnosis_ids,))
-        imagenes = cursor.fetchall()
-
-        
-        if imagenes:
-            print("Imágenes asociadas:")
-            for img in imagenes:
-                print(f"  - ID: {img['image_id']}, URL: {img['image_url']}, "
-                      f"Descripción: {img['description']}, Fecha: {img['date_uploaded']}")
         else:
-            print("No se encontraron imágenes asociadas a los diagnósticos.")
+            print(f"Historial de diagnósticos para el paciente con ID {patient_id}:")
+            for diag in diagnosticos:
+                print(f"  - ID: {diag['diagnosis_id']}, Fecha: {diag['diagnosis_date']}, "
+                    f"Tipo: {diag['diagnosis_type']}, Probabilidad: {diag['probability']}%, "
+                    f"Notas: {diag['preliminary_notes']}")
 
-        return diagnosticos, imagenes
+            
+            imagenes_query = """
+                SELECT * FROM imagenes WHERE diagnosis_id IN (%s)
+            """
+            diagnosis_ids = tuple(diag["diagnosis_id"] for diag in diagnosticos)
+            cursor.execute(imagenes_query, (diagnosis_ids,))
+            imagenes = cursor.fetchall()
 
+            
+            if imagenes:
+                print("Imágenes asociadas:")
+                for img in imagenes:
+                    print(f"  - ID: {img['image_id']}, URL: {img['image_url']}, "
+                        f"Descripción: {img['description']}, Fecha: {img['date_uploaded']}")
+            else:
+                print("No se encontraron imágenes asociadas a los diagnósticos.")
+
+            return diagnosticos, imagenes
     except mysql.connector.Error as err:
         print(f"Error al conectar con la base de datos: {err}")
         return [], []
