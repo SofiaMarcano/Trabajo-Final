@@ -68,6 +68,7 @@ def iny_mysql():
     try:
         conexion = mysql.connector.connect(**db_config)
         cursor = conexion.cursor()
+        
         cursor.execute("SHOW DATABASES;")
         databases = [db[0] for db in cursor.fetchall()]
 
@@ -138,14 +139,14 @@ def login():
     connection = con_db()
     cursor = connection.cursor()
     try:
-        query = "SELECT user_id, password, role FROM usuarios WHERE username = %s"
+        query = "SELECT password, role FROM usuarios WHERE username = %s"
         cursor.execute(query, (username,))
         re= cursor.fetchone()
         if re:
-            user_id, s_password, role = re
+            s_password, role = re
             if s_password == password:
                 print(f"Login exitoso. Rol: {role}")
-                return user_id,role
+                return username,role
             else:
                 print("Contraseña incorrecta.")
         else:
@@ -392,109 +393,121 @@ def del_user():
             connection.close()
 def create_diag():
     paciente_id = rev_num("Ingrese el ID del paciente: ")
-    while True:
-        print("1.MRI\n2.CT\n3.Rayos X")
-        num_tip = rev_num("Ingrese el tipo de imagen:")
-        if num_tip == 1:
-            tipo_imagen = "MRI"
-            break
-        elif num_tip == 2:
-            tipo_imagen = "CT"
-            break
-        elif num_tip == 3:
-            tipo_imagen = "Rayos X"
-            break
-        else:
-            print("Ingrese una opción válida")
-    resultado_ia = input("Ingrese el resultado del análisis de IA (probabilidad %): ")
-    fecha_diagnostico = input("Ingrese la fecha del diagnóstico (YYYY-MM-DD): ")
-    fecha_diagnostico = rev_fecha(fecha_diagnostico)
-    while True:
-        print("1. Si\n2. No")
-        num_est = input("Ingrese el estado de revisión: ")
-        if num_est == 1:
-            estado_revision = "Si"
-            break
-        elif num_est == 2:
-            estado_revision = "No"
-            break
-        else:
-            print("Ingrese una opción válida")
     connection = con_db()
     cursor = connection.cursor()
-    try:
-        cursor.execute("SELECT MAX(diagnostico_id) FROM diagnosticos")
-        max_id = cursor.fetchone()[0]
-        diagnostico_id = (max_id + 1) if max_id else 1 
-        query = """INSERT INTO diagnosticos 
-                   (diagnostico_id, paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado_revision) 
-                   VALUES (%s, %s, %s, %s, %s, %s)"""
-        cursor.execute(query, (diagnostico_id, paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado_revision))
-        connection.commit()
-        print("Diagnóstico creado con éxito.")
-        diag_doc = {
-            "diagnostico_id": diagnostico_id,
-            "paciente_id": paciente_id,
-            "tipo_imagen": tipo_imagen,
-            "resultado_ia": resultado_ia,
-            "fecha_diagnostico": fecha_diagnostico,
-            "estado_revision": estado_revision
-        }
-        db = con_mongodb()
-        rep_colection=db["reportes"]
-        reporte = rep_colection.find_one({"paciente_id": paciente_id})
-        if reporte:
-            rep_colection.insert_one({
-            "paciente_id": paciente_id,
-            "diagnosticos": diag_doc})
-            print("Diagnóstico sincronizado con MongoDB.")
-        else:
-            print(f"No se encontró un reporte con el paciente_id: {paciente_id}. Se procede a crearse un nuevo reporte con el diagnóstico")
-            while True:
-                id_reporte = rev_num("Ingrese el ID del reporte: ")
-                reporte =   rep_colection.find_one({"id_reporte": id_reporte})
-                if reporte:
-                    print("Este reporte ya existe")
-                else:
-                    break
-            medico_id = rev_num("Ingrese el ID del médico que genera el reporte: ")
-            fecha_reporte = rev_fecha("Ingrese la fecha del reporte (YYYY-MM-DD): ")
-            print("¿Deseas ingresar una nota adicional? (1.Si 2.No): ")
-            opc1=rev_num("Selecciona una opcion: ")
-            notas_adicionales = []
-            if opc1==1:
-                while True:
-                    print("\n=== Añadir Nota Adicional ===")
-                    id_nota = rev_num("Ingrese el ID de la nota: ")
-                    fecha_nota = rev_fecha("Ingrese la fecha de la nota (YYYY-MM-DD): ")
-                    texto = input("Ingrese el texto de la nota: ")
-                    notas_adicionales.append({
-                        "id_nota": id_nota,
-                        "fecha_nota": fecha_nota,
-                        "texto": texto
-                    })
-                    cont = rev_num("¿Desea añadir otra nota? (1.Si 2.No): ")
-                    if cont != 1:
-                        break
-            conclusiones = input("Ingrese las conclusiones del médico: ")
-            recomendaciones = input("Ingrese las recomendaciones del médico: ")
-            reporte = {
-                "reporte_id": id_reporte,
-                "paciente_id":paciente_id,
-                "medico_id": medico_id,
-                "fecha_reporte": fecha_reporte,
-                "diagnosticos": diag_doc,
-                "notas_adicionales": notas_adicionales,
-                "conclusiones": conclusiones,
-                "recomendaciones": recomendaciones
-            }
-            rep_colection.insert_one(reporte)
-            print("Reporte creado con éxito.")
-    except Exception as e:
-        print(f"Error al crear el diagnóstico: {e}")
-    finally:
+    cursor.execute("SELECT paciente_id FROM pacientes WHERE paciente_id = %s", (paciente_id,))
+    paciente_exists = cursor.fetchone()
+    if not paciente_exists:
+        print(f"Error: El paciente con ID {paciente_id} no existe en la base de datos.")
         cursor.close()
         connection.close()
+        return
+    else:
+        while True:
+            print("1.MRI\n2.CT\n3.Rayos X")
+            num_tip = rev_num("Ingrese el tipo de imagen:")
+            if num_tip == 1:
+                tipo_imagen = "MRI"
+                break
+            elif num_tip == 2:
+                tipo_imagen = "CT"
+                break
+            elif num_tip == 3:
+                tipo_imagen = "Rayos X"
+                break
+            else:
+                print("Ingrese una opción válida")
+        resultado_ia = input("Ingrese el resultado del análisis de IA (probabilidad %): ")
+        fecha_diagnostico = input("Ingrese la fecha del diagnóstico (YYYY-MM-DD): ")
+        fecha_diagnostico = rev_fecha(fecha_diagnostico)
+        while True:
+            print("1. Si\n2. No")
+            num_est = rev_num("Ingrese el estado de revisión: ")
+            if num_est == 1:
+                estado_revision = "Si"
+                break
+            elif num_est == 2:
+                estado_revision = "No"
+                break
+            else:
+                print("Ingrese una opción válida")
+        connection = con_db()
+        cursor = connection.cursor()
+        try:
+            cursor.execute("SELECT MAX(diagnostico_id) FROM diagnosticos")
+            max_id = cursor.fetchone()[0]
+            diagnostico_id = (max_id + 1) if max_id else 1 
+            query = """INSERT INTO diagnosticos 
+                    (diagnostico_id, paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado) 
+                    VALUES (%s, %s, %s, %s, %s, %s)"""
+            cursor.execute(query, (diagnostico_id, paciente_id, tipo_imagen, resultado_ia, fecha_diagnostico, estado_revision))
+            connection.commit()
+            print("Diagnóstico creado con éxito.")
+            diag_doc = {
+                "diagnostico_id": diagnostico_id,
+                "paciente_id": paciente_id,
+                "tipo_imagen": tipo_imagen,
+                "resultado_ia": resultado_ia,
+                "fecha_diagnostico": fecha_diagnostico,
+                "estado": estado_revision
+            }
+            db = con_mongodb()
+            rep_colection=db["reportes"]
+            reporte = rep_colection.find_one({"paciente_id": paciente_id})
+            if reporte:
+                rep_colection.insert_one({
+                "paciente_id": paciente_id,
+                "diagnosticos": diag_doc})
+                print("Diagnóstico sincronizado con MongoDB.")
+            else:
+                print(f"No se encontró un reporte con el paciente_id: {paciente_id}. Se procede a crearse un nuevo reporte con el diagnóstico")
+                while True:
+                    id_reporte = rev_num("Ingrese el ID del reporte: ")
+                    reporte =   rep_colection.find_one({"id_reporte": id_reporte})
+                    if reporte:
+                        print("Este reporte ya existe")
+                    else:
+                        break
+                medico_id = rev_num("Ingrese el ID del médico que genera el reporte: ")
+                date=input("Ingrese la fecha del reporte (YYYY-MM-DD): ")
+                fecha_reporte = rev_fecha(date)
+                print("¿Deseas ingresar una nota adicional? (1.Si 2.No): ")
+                opc1=rev_num("Selecciona una opcion: ")
+                notas_adicionales = []
+                if opc1==1:
+                    while True:
+                        print("\n=== Añadir Nota Adicional ===")
+                        id_nota = rev_num("Ingrese el ID de la nota: ")
+                        date_n=input("Ingrese la fecha de la nota (YYYY-MM-DD): ")
+                        fecha_nota = rev_fecha(date_n)
+                        texto = input("Ingrese el texto de la nota: ")
+                        notas_adicionales.append({
+                            "id_nota": id_nota,
+                            "fecha_nota": fecha_nota,
+                            "texto": texto
+                        })
+                        cont = rev_num("¿Desea añadir otra nota? (1.Si 2.No): ")
+                        if cont != 1:
+                            break
+                conclusiones = input("Ingrese las conclusiones del médico: ")
+                recomendaciones = input("Ingrese las recomendaciones del médico: ")
+                reporte = {
+                    "reporte_id": id_reporte,
+                    "paciente_id":paciente_id,
+                    "medico_id": medico_id,
+                    "fecha_reporte": fecha_reporte,
+                    "diagnosticos": diag_doc,
+                    "notas_adicionales": notas_adicionales,
+                    "conclusiones": conclusiones,
+                    "recomendaciones": recomendaciones
+                }
+                rep_colection.insert_one(reporte)
+                print("Reporte creado con éxito.")
+        except Exception as e:
+            print(f"Error al crear el diagnóstico: {e}")
+        finally:
+            cursor.close()
+            connection.close()
 def read_diag():
     diag_id=rev_num("Ingrese el ID del diagnostico: ")
     connection = con_db()
@@ -505,7 +518,7 @@ def read_diag():
         result = cursor.fetchone()
         if result:
             print("Diagnóstico encontrado")
-            print(f"ID: {result[0]}, Tipo de Imagen: {result[2]}, Resultado IA: {result[3]}%, Estado de Revisión: {result[6]}")
+            print(f"ID: {result[0]}, ID del paciente: {result[1]} Tipo de Imagen: {result[2]}, Resultado IA: {result[3]}%, Estado de Revisión: {result[5]}")
         else:
             print("Diagnóstico no encontrado ")
     except Exception as e:
@@ -521,53 +534,72 @@ def act_diag():
         query = "SELECT * FROM diagnosticos WHERE diagnostico_id = %s"
         cursor.execute(query, (diagnostico_id,))
         result = cursor.fetchone()
-        if result:
-            while True:
-                print(f"Datos actuales: Tipo de Imagen: {result[2]}, Resultado IA: {result[3]}%, Estado de Revisión: {result[6]}")
-                print("\n¿Qué deseas actualizar?\n1. Resultado de IA\n2. Estado de Revisión")
-                opc = rev_num("Ingrese el número de la opción que desea actualizar: ")
-                if opc == 1:
-                    new_res_ia = input("Ingrese el nuevo resultado de IA: ")
-                    query = "UPDATE diagnosticos SET resultado_ia = %s WHERE diagnostico_id = %s"
-                    cursor.execute(query, (new_res_ia, diagnostico_id))
-                    break
-                elif opc == 2:
-                    while True:
-                        print("1. Si\n2. No")
-                        num = input("Ingrese el nuevo estado de revisión : ")
-                        if num==1:
-                            new_est_rev="Si"
-                            break
-                        elif num==2:
-                            new_est_rev="No"
-                            break
-                        else:
-                            print("Opcion no valida")
-                    query = "UPDATE diagnosticos SET estado_revision = %s WHERE diagnostico_id = %s"
-                    cursor.execute(query, (new_est_rev, diagnostico_id))
-                    break
-                else:
-                    print("Opción no válida.")
+        
+        if not result:
+            print("Diagnóstico no encontrado en MySQL.")
+            return
+        else:
+            print(f"Datos actuales:\nTipo de Imagen: {result[2]}\nResultado IA: {result[3]}%\nEstado: {result[5]}")
+            print("\n¿Qué deseas actualizar?\n1. Resultado IA\n2. Estado de Revisión")
+            opc = rev_num("Ingrese el número de la opción que desea actualizar: ")
+            if opc == 1:
+                new_res_ia = input("Ingrese el nuevo resultado de IA: ")
+                query = "UPDATE diagnosticos SET resultado_ia = %s WHERE diagnostico_id = %s"
+                cursor.execute(query, (new_res_ia, diagnostico_id))
+            elif opc == 2:
+                while True:
+                    print("1. Si\n2. No")
+                    num_est = rev_num("Ingrese el nuevo estado de revisión: ")
+                    if num_est == 1:
+                        new_est_rev = "Si"
+                        break
+                    elif num_est == 2:
+                        new_est_rev = "No"
+                        break
+                    else:
+                        print("Opción no válida")
+                
+                query = "UPDATE diagnosticos SET estado = %s WHERE diagnostico_id = %s"
+                cursor.execute(query, (new_est_rev, diagnostico_id))
+            else:
+                print("Opción no válida.")
+                return
             connection.commit()
             print("Diagnóstico actualizado con éxito en MySQL.")
-            db= con_mongodb()
-            rep_colection=db["reportes"]
-            if rep_colection:
-                diag_act = rep_colection.find_one({"_id": diagnostico_id})
-                if diag_act:
-                    if opc == 1:
-                        diag_act['analisis_IA']['resultado_preliminar'] = new_res_ia
-                    elif opc == 2:
-                        diag_act['estado_revision'] = new_est_rev
-                    rep_colection.replace_one({"_id": diagnostico_id}, diag_act)
-                    print("Diagnóstico actualizado en MongoDB.")
-        else:
-            print("Diagnóstico no encontrado.")
+            db = con_mongodb()
+            rep_colection = db["reportes"]
+            reporte = rep_colection.find_one({"diagnosticos.diagnostico_id": diagnostico_id})
+            
+            if reporte:
+                diagnosticos = reporte.get("diagnosticos", {})
+                if diagnosticos: 
+                    updated_diag = None
+                    for diag in diagnosticos:
+                        if diag["diagnostico_id"] == diagnostico_id:
+                            updated_diag = diag
+                            break
+                    if updated_diag:
+                        if opc == 1:
+                            updated_diag["resultado_ia"] = new_res_ia
+                        elif opc == 2:
+                            updated_diag["estado"] = new_est_rev
+                        rep_colection.update_one(
+                            {"_id": reporte["_id"], "diagnosticos.diagnostico_id": diagnostico_id},
+                            {"$set": {"diagnosticos.$": updated_diag}}
+                        )
+                        print("Diagnóstico actualizado con éxito en MongoDB.")
+                else:
+                    print("Error: 'diagnosticos' no contiene elementos en el reporte de MongoDB.")
+            else:
+                print(f"No se encontró el reporte con el diagnóstico ID {diagnostico_id} en MongoDB.")
+    
     except Exception as e:
         print(f"Error al actualizar el diagnóstico: {e}")
+    
     finally:
         cursor.close()
         connection.close()
+
 def del_diag():
     diagnostico_id = rev_num("Ingrese el ID del diagnóstico a eliminar: ")
     connection = con_db()
@@ -770,7 +802,7 @@ def act_reporte():
             print("Conclusiones y recomendaciones actualizadas con éxito.")
         else:
             print("Opción no válida.")
-def add_nota_tec(user_id):
+def add_nota_tec(username):
     db = con_mongodb()
     rep_colection = db["reportes"]
     reporte_id = rev_num("Ingrese el ID del reporte al que desea añadir notas técnicas: ")
@@ -795,7 +827,7 @@ def add_nota_tec(user_id):
                     print("1.Alta\n2.Media\n3.Baja")
                     pri= input("Ingrese la prioridad de la nota : ")
                     if pri==1:
-                        prionidad="Alta"
+                        prioridad="Alta"
                         break
                     elif pri==2:
                         prioridad="Media"
@@ -809,7 +841,7 @@ def add_nota_tec(user_id):
                     "id_nota_tecnica": id_nota_tecnica,
                     "fecha_nota_tecnica": fecha_nota_tec,
                     "texto": text,
-                    "autor_tecnico": user_id,
+                    "autor_tecnico": username,
                     "tipo_procedimiento": tipo_pro,
                     "prioridad": prioridad
                 }
