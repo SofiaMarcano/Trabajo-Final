@@ -10,15 +10,15 @@ while True:
     print("Por favor, inicie sesión.")
     user_data = functions.login()  
     if user_data:
-        user, rol = user_data
-        print(f"Bienvenido, {user}. Tu rol es: {rol}.")
+        username, rol = user_data
+        print(f"Bienvenido, {username}. Tu rol es: {rol}.")
         break
     else:
         print("Login fallido. Por favor, intente nuevamente.")
 while True:
     if rol == "administrador":
         msj = (
-            f"Bienvenido al menú administrador, {user}.\n"
+            f"Bienvenido al menú administrador, {username}.\n"
             "Seleccione una opción:\n"
             "1. Gestión de usuario.\n"
             "2. Gestión de pacientes.\n"
@@ -126,7 +126,7 @@ while True:
     
     elif rol == "medico":
         msj = (
-            f"Bienvenido al menú médico, {user}.\n"
+            f"Bienvenido al menú médico, {username}.\n"
             "Seleccione una opción:\n"
             "1. Gestionar pacientes.\n"
             "2. Gestionar diagnósticos.\n"
@@ -197,7 +197,7 @@ while True:
     
     elif rol == "tecnico":
         msj = (
-            f"Bienvenido al menú técnico, {user}.\n"
+            f"Bienvenido al menú técnico, {username}.\n"
             "Seleccione una opción:\n"
             "1. Añadir imágenes.\n"
             "2. Añadir notas técnicas.\n"
