@@ -27,7 +27,7 @@ while True:
             "5. Salir.\n"
             "======================\n"
         )
-        opc= functions.ver_num(msj)
+        opc= functions.rev_num(msj)
         if opc== 1:
             while True:
                 msj = (
@@ -84,7 +84,7 @@ while True:
                     "5. Salir.\n"
                     "=================\n"
                 )
-                opc1 = functions.ver_num(msj)
+                opc1 = functions.rev_num(msj)
                 if opc1 == 1:
                     functions.create_diag()
                 elif opc1 == 2:
@@ -107,7 +107,7 @@ while True:
                     "4. Salir.\n"
                     "=================\n"
                 )
-                opc1= functions.ver_num(msj)
+                opc1= functions.rev_num(msj)
                 if opc1== 1:
                     functions.alm_imagenes()
                 elif opc1== 2:
@@ -144,7 +144,7 @@ while True:
                     "3. Salir.\n"
                     "=================\n"
                 )
-                opc1 = functions.ver_num(msj)
+                opc1 = functions.rev_num(msj)
                 if opc1 == 1:
                     functions.read_pac()
                 elif opc1 == 2:
@@ -162,7 +162,7 @@ while True:
                     "3. Salir.\n"
                     "=================\n"
                 )
-                opc1 = functions.ver_num(msj)
+                opc1 = functions.rev_num(msj)
                 if opc1 == 1:
                     functions.act_diag()
                 elif opc1 == 2:
