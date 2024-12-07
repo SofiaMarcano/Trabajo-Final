@@ -5,6 +5,7 @@ db_config = {
     "host": "localhost",
     "user": "informatica1",
     "password": "info20242",
+    "database":"SistemaMedico"
 }
 def rango(min_val, max_val, msj, u):
     while True:
@@ -15,12 +16,7 @@ def rango(min_val, max_val, msj, u):
             print(f"El valor debe estar entre {min_val} y {max_val}.")
         except ValueError:
             print("Por favor, ingrese un número válido.")
-from pymongo import MongoClient
-import mysql.connector
-def ini_mysql():
-    """
-    Crea e inicializa la base de datos en MySQL con datos iniciales.
-    """
+def iny_mysql():
     db_name = "SistemaMedico"
     ex_tab = ["usuarios", "pacientes", "diagnosticos"]
     data_inserts = {
@@ -38,9 +34,10 @@ def ini_mysql():
             (2, "CT", "Fractura craneal", "2024-05-13", "Si")
         ]
     }
+    
     create_tab = {
         "usuarios": """
-            CREATE TABLE usuarios (
+            CREATE TABLE IF NOT EXISTS usuarios (
                 user_id INT AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(50) NOT NULL,
                 password VARCHAR(255) NOT NULL,
@@ -48,7 +45,7 @@ def ini_mysql():
             );
         """,
         "pacientes": """
-            CREATE TABLE pacientes (
+            CREATE TABLE IF NOT EXISTS pacientes (
                 paciente_id INT PRIMARY KEY,
                 nombre VARCHAR(100) NOT NULL,
                 edad INT NOT NULL,
@@ -56,7 +53,7 @@ def ini_mysql():
             );
         """,
         "diagnosticos": """
-            CREATE TABLE diagnosticos (
+            CREATE TABLE IF NOT EXISTS diagnosticos (
                 diagnostico_id INT AUTO_INCREMENT PRIMARY KEY,
                 paciente_id INT NOT NULL,
                 tipo_imagen ENUM('MRI', 'CT', 'Rayos X') NOT NULL,
@@ -78,11 +75,11 @@ def ini_mysql():
             print(f"La base de datos '{db_name}' no existe. Creándola...")
             cursor.execute(f"CREATE DATABASE {db_name};")
             print(f"Base de datos '{db_name}' creada exitosamente.")
-
+        else:
+            print(f"La base de datos '{db_name}' ya existe.")
         cursor.execute(f"USE {db_name};")
         cursor.execute("SHOW TABLES;")
         existing_tables = [table[0] for table in cursor.fetchall()]
-
         for table_name in ex_tab:
             if table_name in existing_tables:
                 print(f"La tabla '{table_name}' ya existe.")
@@ -90,7 +87,6 @@ def ini_mysql():
                 print(f"La tabla '{table_name}' no existe. Creándola...")
                 cursor.execute(create_tab[table_name])
                 print(f"Tabla '{table_name}' creada exitosamente.")
-
         for table_name, data in data_inserts.items():
             for record in data:
                 if table_name == "usuarios":
@@ -103,6 +99,7 @@ def ini_mysql():
 
         conexion.commit()
         print("Datos iniciales insertados exitosamente.")
+    
     except mysql.connector.Error as err:
         print(f"Error de MySQL: {err.msg} (Código: {err.errno})")
     finally:
