@@ -73,7 +73,7 @@ def iny_mysql():
 
         if db_name not in databases:
             print(f"La base de datos '{db_name}' no existe. Creándola...")
-            cursor.execute(f"CREATE DATABASE {db_name};")
+            cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name};")
             print(f"Base de datos '{db_name}' creada exitosamente.")
         else:
             print(f"La base de datos '{db_name}' ya existe.")
