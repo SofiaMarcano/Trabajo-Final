@@ -771,8 +771,21 @@ def create_reporte():
                         probabilidad = rev_num("Ingrese la probabilidad del análisis IA (%): ")
                         notas_ia = input("Ingrese las notas del análisis de IA: ")
                         comentarios_medico = input("Ingrese comentarios del médico sobre el diagnóstico: ")
-                        print("1. Pendiente\n2. Confirmado\n3. Descartado")
-                        estado_diagnostico = ["Pendiente", "Confirmado", "Descartado"][rev_num("Ingrese el estado del diagnóstico: ") - 1]
+                        date=input("Ingrese la fecha: ")
+                        fecha_diag=rev_fecha(date)
+                        while True:
+                            est = rev_num("Ingrese el estado del diagnóstico ( 1. Pendiente, 2. Confirmado, 3. Descartado): ")
+                            if est == 1:
+                                estado = "Pendiente"
+                                break
+                            elif est == 2:
+                                estado = "Confirmado"
+                                break
+                            elif est == 3:
+                                estado = "Descartado"
+                                break
+                            else:
+                                print("Ingrese una opción válida")
                         diag_doc = {
                             "id_diagnostico": id_diagnostico,
                             "tipo_imagen": tipo_imagen,
@@ -782,16 +795,17 @@ def create_reporte():
                                 "probabilidad_%": probabilidad,
                                 "notas": notas_ia
                             },
+                            "fecha_diagnostico":fecha_diag,
                             "comentarios_medico": comentarios_medico,
-                            "estado_diagnostico": estado_diagnostico
+                            "estado_diagnostico": estado
                         }
                         diagnosticos.append(diag_doc)
                         query = """INSERT INTO diagnosticos 
                                     (diagnostico_id, paciente_id, tipo_imagen, parte_cuerpo, condicion_sugerida, 
-                                    probabilidad, notas_ia, comentarios_medico, estado_diagnostico) 
+                                    probabilidad, notas_ia, comentarios_medico,fecha_diagnostico, estado) 
                                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
                         cursor.execute(query, (id_diagnostico, paciente_id, tipo_imagen, parte_cuerpo, condicion_sugerida,
-                                                probabilidad, notas_ia, comentarios_medico, estado_diagnostico))
+                                                probabilidad, notas_ia, comentarios_medico,fecha_diag, estado))
                         connection.commit()
                         print(f"Diagnóstico {id_diagnostico} creado exitosamente en MySQL y preparado para MongoDB.")
                         cont = rev_num("¿Desea añadir otro diagnóstico? (1. Sí / 2. No): ")
@@ -822,7 +836,7 @@ def create_reporte():
             recomendaciones = input("Ingrese las recomendaciones del médico: ")
             notas_tec={}
             reporte_doc = {
-                "eporte_id": reporte_id,
+                "reporte_id": reporte_id,
                 "paciente_id": paciente_id,
                 "medico_id": medico_id,
                 "fecha_reporte": fecha_reporte,
@@ -1064,3 +1078,165 @@ def eliminar_imagen():
         else:
             print("Operación cancelada.")
 def search_pac(patient_id):
+    """Busca el historial de diagnósticos de un paciente dado su ID y consulta imágenes asociadas."""
+    try:
+        
+        connection = mysql.connector.connect(
+            host=db_config["host"],
+            user=db_config["user"],
+            password=db_config["password"],
+            database="Informatica1_PF"
+        )
+        cursor = connection.cursor(dictionary=True)
+        query = """
+            SELECT * FROM diagnosticos WHERE patient_id = %s
+        """
+        cursor.execute(query, (patient_id,))
+        diagnosticos = cursor.fetchall()
+
+        if not diagnosticos:
+            print(f"No se encontraron diagnósticos para el paciente con ID {patient_id}.")
+            return []
+        else:
+            print(f"Historial de diagnósticos para el paciente con ID {patient_id}:")
+            for diag in diagnosticos:
+                print(f"  - ID: {diag['diagnosis_id']}, Fecha: {diag['diagnosis_date']}, "
+                    f"Tipo: {diag['diagnosis_type']}, Probabilidad: {diag['probability']}%, "
+                    f"Notas: {diag['preliminary_notes']}")
+
+            
+            imagenes_query = """
+                SELECT * FROM imagenes WHERE diagnosis_id IN (%s)
+            """
+            diagnosis_ids = tuple(diag["diagnosis_id"] for diag in diagnosticos)
+            cursor.execute(imagenes_query, (diagnosis_ids,))
+            imagenes = cursor.fetchall()
+
+            
+            if imagenes:
+                print("Imágenes asociadas:")
+                for img in imagenes:
+                    print(f"  - ID: {img['image_id']}, URL: {img['image_url']}, "
+                        f"Descripción: {img['description']}, Fecha: {img['date_uploaded']}")
+            else:
+                print("No se encontraron imágenes asociadas a los diagnósticos.")
+
+            return diagnosticos, imagenes
+    except mysql.connector.Error as err:
+        print(f"Error al conectar con la base de datos: {err}")
+        return [], []
+    finally:
+        if 'connection' in locals() and connection.is_connected():
+            cursor.close()
+            connection.close()
+def iny_mongo():
+    client = MongoClient("mongodb://localhost:27017/")
+    
+    db_config = {
+        "sistema_medico": {
+            "reportes": [
+                {
+                    "reporte_id": 1,
+                    "paciente_id": 1,
+                    "medico_id": 101,
+                    "fecha_reporte": "2024-12-01",
+                    "diagnosticos": [
+                        {
+                            "id_diagnostico": 1,
+                            "tipo_imagen": "MRI",
+                            "parte_cuerpo": "Cabeza",
+                            "analisis_IA": {
+                                "condicion_sugerida": "Tumor cerebral",
+                                "probabilidad_%": 85,
+                                "notas": "Se observa una masa irregular en la región frontal."
+                            },
+                            "comentarios_medico": "Se recomienda una biopsia para confirmar.",
+                            "fecha_diagnostico": "2024-12-01",
+                            "estado": "Pendiente"
+                        }
+                    ],
+                    "notas_adicionales": [
+                        {
+                            "id_nota": 1,
+                            "fecha_nota": "2024-12-01",
+                            "texto": "Pendiente de resultados del laboratorio."
+                        }
+                    ],
+                    "conclusiones": "Se requiere seguimiento.",
+                    "recomendaciones": "Consulta con neurocirugía."
+                },
+                {
+                    "reporte_id": 2,
+                    "paciente_id": 2,
+                    "medico_id": 102,
+                    "fecha_reporte": "2024-12-05",
+                    "diagnosticos": [
+                        {
+                            "id_diagnostico": 2,
+                            "tipo_imagen": "Rayos X",
+                            "parte_cuerpo": "Pulmones",
+                            "analisis_IA": {
+                                "condicion_sugerida": "Neumonía",
+                                "probabilidad_%": 70,
+                                "notas": "Hay signos de consolidación en los pulmones, compatible con neumonía bacteriana."
+                            },
+                            "comentarios_medico": "Iniciar tratamiento con antibióticos.",
+                            "fecha_diagnostico": "2024-12-05",
+                            "estado": "Confirmado"
+                        }
+                    ],
+                    "notas_adicionales": [
+                        {
+                            "id_nota": 2,
+                            "fecha_nota": "2024-12-05",
+                            "texto": "Se recomienda evaluación pulmonar en 7 días."
+                        }
+                    ],
+                    "conclusiones": "Condición tratable.",
+                    "recomendaciones": "Monitorización diaria."
+                }
+            ],
+            "Imagenes": [
+                {
+                    "ID paciente": 1,
+                    "Tipo de imagen": "MRI",
+                    "Fecha de imagen": "2024-12-08",
+                    "Resultado IA": "85%",
+                    "Información técnica": {
+                        "Tipo captura": "Digital",
+                        "Contraste": "No",
+                        "Posicionamiento": "Decúbito supino",
+                        "Resolución espacial": "0.5 mm/píxel",
+                        "Frecuencia muestreo": "10 MHz"
+                    },
+                    "Zona de estudio": "Cabeza"
+                },
+                {
+                    "ID paciente": 2,
+                    "Tipo de imagen": "Rayos X",
+                    "Fecha de imagen": "2024-12-07",
+                    "Resultado IA": "70%",
+                    "Información técnica": {
+                        "Tipo captura": "Analógica",
+                        "Contraste": "Sí",
+                        "Posicionamiento": "De pie",
+                        "Resolución espacial": "1.0 mm/píxel",
+                        "Frecuencia muestreo": "8 MHz"
+                    },
+                    "Zona de estudio": "Tórax"
+                }
+            ]
+        }
+    }
+    
+    for db_name, collections in db_config.items():
+        db = client[db_name]
+        for collection_name, default_data in collections.items():
+            if collection_name not in db.list_collection_names():
+                db.create_collection(collection_name)
+                print(f"Creada la colección '{collection_name}' en la base de datos '{db_name}'.")
+                if default_data:
+                    db[collection_name].insert_many(default_data)
+                    print(f"Insertados datos iniciales en la colección '{collection_name}'.")
+            else:
+                print(f"La colección '{collection_name}' ya existe en la base de datos '{db_name}'.")
