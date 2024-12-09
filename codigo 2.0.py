@@ -6,6 +6,7 @@ db_config = {
     "database":"SistemaMedico"
 }
 functions.iny_mysql()
+functions.iny_mongo()
 while True:
     print("Por favor, inicie sesión.")
     user_data = functions.login()  
@@ -218,3 +219,4 @@ while True:
         else:
             print("Rol no reconocido. Saliendo del sistema...")
             break
+
