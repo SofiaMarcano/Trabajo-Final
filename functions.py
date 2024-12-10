@@ -648,7 +648,7 @@ def act_diag():
             print(f"Diagnóstico encontrado: ID {diagnostico_id}")
             
             while True:
-                print("1. Tipo de Imagen\n2. Condición Sugerida\n3. Probabilidad\n4. Estado\n5. Salir")
+                print("1. Tipo de Imagen\n2. Condición Sugerida\n3. Probabilidad\n4. Notas IA\n5.estado")
                 opcion = rev_num("Ingrese una opción: ")
                 
                 if opcion == 1:
@@ -678,6 +678,7 @@ def act_diag():
 
                     else:
                         print("El tipo de imagen ya está actualizado con el valor actual.")
+                    break
 
                 elif opcion == 2:
                     condicion_sugerida = input(f"Nueva condición sugerida (actual: {diagnostico[4]}): ") or diagnostico[4]
@@ -688,6 +689,7 @@ def act_diag():
                     """, (condicion_sugerida, diagnostico_id))
                     connection.commit()
                     print(f"Condición sugerida actualizada a: {condicion_sugerida}")
+                    break
 
                 elif opcion == 3:
                     probabilidad = rev_num(f"Nueva probabilidad del diagnóstico (actual: {diagnostico[5]}%): ") or diagnostico[5]
@@ -698,6 +700,7 @@ def act_diag():
                     """, (probabilidad, diagnostico_id))
                     connection.commit()
                     print(f"Probabilidad actualizada a: {probabilidad}%")
+                    break
 
                 elif opcion == 4:
                     notas_ia = input(f"Nuevas notas de la IA (actual: {diagnostico[6]}): ") or diagnostico[6]
@@ -708,6 +711,7 @@ def act_diag():
                     """, (notas_ia, diagnostico_id))
                     connection.commit()
                     print(f"Notas de la IA actualizadas a: {notas_ia}")
+                    break
 
                 elif opcion == 5:
                     while True:
@@ -724,6 +728,7 @@ def act_diag():
                         else:
                             print("Ingrese una opción válida")
                     
+                    
                     cursor.execute("""
                         UPDATE diagnosticos
                         SET estado = %s
@@ -731,9 +736,6 @@ def act_diag():
                     """, (estado, diagnostico_id))
                     connection.commit()
                     print(f"Estado actualizado a: {estado}")
-
-                elif opcion == 6:
-                    print("Saliendo de la actualización de diagnóstico.")
                     break
 
                 else:
@@ -749,7 +751,7 @@ def act_diag():
             if reporte:
                 diagnosticos = reporte.get("diagnosticos", [])
                 for diag in diagnosticos:
-                    if diag["diagnostico_id"] == diagnostico_id:
+                    if diag["id_diagnostico"] == diagnostico_id:
                         # Actualizar el diagnóstico en MongoDB según la opción seleccionada
                         if opcion == 1:
                             diag["tipo_imagen"] = tipo_imagen
@@ -815,9 +817,9 @@ def create_reporte():
     db = con_mongodb()
     rep_colection = db["reportes"]
     if rep_colection is not None:
-        last_reporte = rep_colection.find().sort("id_reporte", -1).limit(1)  # Ordenar y limitar
+        last_reporte = rep_colection.find().sort("reporte_id", -1).limit(1)  # Ordenar y limitar
         last_reporte = list(last_reporte)  # Convertir a lista para extraer datos
-        reporte_id = (last_reporte[0]["id_reporte"] + 1) if last_reporte else 1
+        reporte_id = (last_reporte[0]["reporte_id"] + 1) if last_reporte else 1
         print(f"Creando un nuevo reporte con ID: {reporte_id}")
         paciente_id = rev_num("Ingrese el ID del paciente: ")
         connection = con_db()
@@ -845,9 +847,20 @@ def create_reporte():
                         if cursor.fetchone():
                             print(f"El diagnóstico con ID {id_diagnostico} ya existe. Use otro ID.")
                             continue
-                        print("1. MRI\n2. CT\n3. Rayos X")
-                        num_img = rev_num("Ingrese el tipo de imagen: ")
-                        tipo_imagen = ["MRI", "CT", "Rayos X"][num_img - 1] if 1 <= num_img <= 3 else None
+                        while True:
+                            print("1. MRI\n2. CT\n3. Rayos X")
+                            num_tip = rev_num("Ingrese el tipo de imagen: ")
+                            if num_tip == 1:
+                                tipo_imagen = "MRI"
+                                break
+                            elif num_tip == 2:
+                                tipo_imagen = "CT"
+                                break
+                            elif num_tip == 3:
+                                tipo_imagen = "Rayos X"
+                                break
+                            else:
+                                print("Ingrese una opción válida")
                         parte_cuerpo = input("Ingrese la parte del cuerpo: ")
                         condicion_sugerida = input("Ingrese la condición sugerida por IA: ")
                         probabilidad = rev_num("Ingrese la probabilidad del análisis IA (%): ")
@@ -885,7 +898,7 @@ def create_reporte():
                         query = """INSERT INTO diagnosticos 
                                     (diagnostico_id, paciente_id, tipo_imagen, parte_cuerpo, condicion_sugerida, 
                                     probabilidad, notas_ia, comentarios_medico,fecha_diagnostico, estado) 
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,%s)"""
                         cursor.execute(query, (id_diagnostico, paciente_id, tipo_imagen, parte_cuerpo, condicion_sugerida,
                                                 probabilidad, notas_ia, comentarios_medico,fecha_diag, estado))
                         connection.commit()
@@ -904,7 +917,8 @@ def create_reporte():
                 while True:
                     print("\n=== Añadir Nota Adicional ===")
                     id_nota = rev_num("Ingrese el ID de la nota: ")
-                    fecha_nota = rev_fecha("Ingrese la fecha de la nota (YYYY-MM-DD): ")
+                    date_n=input("Ingrese la fecha de la nota (YYYY-MM-DD): ")
+                    fecha_nota = rev_fecha(date_n)
                     texto = input("Ingrese el texto de la nota: ")
                     notas_adicionales.append({
                         "id_nota": id_nota,
@@ -937,21 +951,21 @@ def act_reporte():
     db = con_mongodb()
     rep_colection = db["reportes"]
     reporte_id = rev_num("Ingrese el ID del reporte a actualizar: ")
-    reporte = rep_colection.find_one({"id_reporte": reporte_id})
+    reporte = rep_colection.find_one({"reporte_id": reporte_id})
     if not reporte:
         print("Reporte no encontrado.")
         return
     else:
         print("Reporte encontrado. Información actual del reporte:")
-        print(f"ID del reporte: {reporte['id_reporte']}")
-        print(f"Paciente ID: {reporte['id_paciente']}")
-        print(f"Médico ID: {reporte['id_medico']}")
+        print(f"ID del reporte: {reporte['reporte_id']}")
+        print(f"Paciente ID: {reporte['paciente_id']}")
+        print(f"Médico ID: {reporte['medico_id']}")
         print(f"Fecha del reporte: {reporte['fecha_reporte']}")
         print("Diagnósticos actuales:")
         for diag in reporte["diagnosticos"]:
             print(f"\n=== Diagnóstico ID: {diag['id_diagnostico']} ===")
             print(f"Comentarios médicos: {diag['comentarios_medico']}")
-            print(f"Estado del diagnóstico: {diag['estado_diagnostico']}")
+            print(f"Estado del diagnóstico: {diag['estado']}")
             print("===")
         print("1. Comentarios y estado de diagnostico.\n2.Notas adicionales\n3.Conclusiones y recomendaciones")
         opc = rev_num("Seleccione la opción de actualización : ")
@@ -967,9 +981,9 @@ def act_reporte():
                 print(f"Parte del cuerpo: {diag['parte_cuerpo']}")
                 print(f"Condición sugerida por IA: {diag['analisis_IA']['condicion_sugerida']}")
                 print(f"Probabilidad del análisis IA: {diag['analisis_IA']['probabilidad_%']}%")
-                print(f"Notas del análisis IA: {diag['analisis_IA']['notas']}")
+                print(f"Notas del análisis IA: {diag['analisis_IA']['notas_ia']}")
                 print(f"Comentarios médicos: {diagnostico['comentarios_medico']}")
-                print(f"Estado del diagnóstico: {diagnostico['estado_diagnostico']}")
+                print(f"Estado del diagnóstico: {diagnostico['estado']}")
                 new_come = input("Ingrese el nuevo comentario del médico (deje en blanco para no modificar): ")
                 new_est = input("Ingrese el nuevo estado del diagnóstico (deje en blanco para no modificar): ")
                 if new_come:
@@ -986,24 +1000,30 @@ def act_reporte():
                 print(f"Diagnóstico {diagnostico_id} actualizado con exito.")
         elif opc == 2:
             new_nota_id = rev_num("Ingrese el ID de la nueva nota: ")
-            fecha_nota = rev_fecha("Ingrese la fecha de la nota (YYYY-MM-DD): ")
-            text_nota = input("Ingrese el texto de la nota: ")
-            rep_colection.update_one(
-                {"id_reporte": reporte_id},
-                {"$push": {
-                    "notas_adicionales": {
-                        "id_nota": new_nota_id,
-                        "fecha_nota": fecha_nota,
-                        "texto": text_nota
-                    }
-                }}
-            )
-            print("Nota adicional agregada con éxito.")
+            notas_actuales = reporte.get("notas_adicionales", [])
+            if any(nota["id_nota"] == new_nota_id for nota in notas_actuales):
+                print(f"El ID de nota {new_nota_id} ya existe en las notas adicionales. Intente con otro ID.")
+                return
+            else:
+                date_n=input("Ingrese la fecha de la nota (YYYY-MM-DD): ")
+                fecha_nota = rev_fecha(date_n)
+                text_nota = input("Ingrese el texto de la nota: ")
+                rep_colection.update_one(
+                    {"id_reporte": reporte_id},
+                    {"$push": {
+                        "notas_adicionales": {
+                            "id_nota": new_nota_id,
+                            "fecha_nota": fecha_nota,
+                            "texto": text_nota
+                        }
+                    }}
+                )
+                print("Nota adicional agregada con éxito.")
         elif opc == 3:
             new_conc = input("Ingrese las nuevas conclusiones del médico: ")
             new_reco = input("Ingrese las nuevas recomendaciones del médico: ")
             rep_colection.update_one(
-                {"id_reporte": reporte_id},
+                {"reporte_id": reporte_id},
                 {"$set": {
                     "conclusiones": new_conc,
                     "recomendaciones": new_reco
@@ -1015,114 +1035,165 @@ def act_reporte():
 def add_nota_tec(username):
     db = con_mongodb()
     rep_colection = db["reportes"]
+    
+    # Verificar el ID del reporte
     reporte_id = rev_num("Ingrese el ID del reporte al que desea añadir notas técnicas: ")
-    reporte = rep_colection.find_one({"id_reporte": reporte_id})
+    reporte = rep_colection.find_one({"reporte_id": reporte_id})
     if not reporte:
         print("Reporte no encontrado.")
+        return
     else:
-        print(f"Reporte encontrado. ID: {reporte['id_reporte']}")
-        notas_tecnicas = reporte.get("notas_tecnicas", [])
+        print(f"Reporte encontrado. ID: {reporte['reporte_id']}")
+
+    # Añadir notas técnicas
+    while True:
+        print("\n=== Añadir Nota Técnica ===")
+        
+        # Verificar si el ID de la nota ya existe
+        id_nota_tecnica = rev_num("Ingrese el ID de la nueva nota técnica: ")
+        if any(i["id_nota_tecnica"] == id_nota_tecnica for i in reporte.get("notas_tecnicas", [])):
+            print("Ya existe una nota técnica con este ID. Intente con otro.")
+            continue
+        
+        # Capturar los detalles de la nota técnica
+        date_n = input("Ingrese la fecha de la nota técnica (YYYY-MM-DD): ")
+        fecha_nota_tec = rev_fecha(date_n)
+        text = input("Ingrese el texto de la nota técnica: ")
+        tipo_pro = input("Ingrese el tipo de procedimiento relacionado: ")
+        
+        # Prioridad
         while True:
-            print("\n=== Añadir Nota Técnica ===")
-            id_nota_tecnica = rev_num("Ingrese el ID de la nueva nota técnica: ")
-            if any(i["id_nota_tecnica"] == id_nota_tecnica for i in notas_tecnicas):
-                print("Ya existe una nota técnica con este ID. Intente con otro.")
-                continue
+            print("1. Alta\n2. Media\n3. Baja")
+            pri = rev_num("Ingrese la prioridad de la nota: ")
+            if pri == 1:
+                prioridad = "Alta"
+                break
+            elif pri == 2:
+                prioridad = "Media"
+                break
+            elif pri == 3:
+                prioridad = "Baja"
+                break
             else:
-                fecha_nota_tec = rev_fecha("Ingrese la fecha de la nota técnica (YYYY-MM-DD): ")
-                text= input("Ingrese el texto de la nota técnica: ")
-                tipo_pro = input("Ingrese el tipo de procedimiento relacionado: ")
-                while True:
-                    print("1.Alta\n2.Media\n3.Baja")
-                    pri= input("Ingrese la prioridad de la nota : ")
-                    if pri==1:
-                        prioridad="Alta"
-                        break
-                    elif pri==2:
-                        prioridad="Media"
-                        break
-                    elif pri==3:
-                        prioridad="Baja"
-                        break
-                    else:
-                        print("Ingrese una opcion valida")
-                new_nota = {
-                    "id_nota_tecnica": id_nota_tecnica,
-                    "fecha_nota_tecnica": fecha_nota_tec,
-                    "texto": text,
-                    "autor_tecnico": username,
-                    "tipo_procedimiento": tipo_pro,
-                    "prioridad": prioridad
-                }
-                notas_tecnicas.append(new_nota)
-                print(f"La nota técnica con ID {id_nota_tecnica} fue añadida exitosamente.")
-                continuar = rev_num("¿Desea añadir otra nota técnica? (1. Sí 2. No): ")
-                if continuar != 1:
-                    break
-            try:
-                rep_colection.update_one(
-                    {"id_reporte": reporte_id},
-                    {"$set": {"notas_tecnicas": notas_tecnicas}}
-                )
-                print("Notas técnicas añadidas exitosamente al reporte.")
-            except Exception as e:
-                print(f"Error al actualizar las notas técnicas en el reporte: {e}")
+                print("Ingrese una opción válida.")
+        
+        # Crear la nueva nota técnica
+        new_nota = {
+            "id_nota_tecnica": id_nota_tecnica,
+            "fecha_nota_tecnica": fecha_nota_tec,
+            "texto": text,
+            "autor_tecnico": username,
+            "tipo_procedimiento": tipo_pro,
+            "prioridad": prioridad
+        }
+        
+        # Añadir la nota técnica a MongoDB usando `$push`
+        try:
+            rep_colection.update_one(
+                {"reporte_id": reporte_id},
+                {"$push": {"notas_tecnicas": new_nota}}
+            )
+            print(f"La nota técnica con ID {id_nota_tecnica} fue añadida exitosamente.")
+        except Exception as e:
+            print(f"Error al añadir la nota técnica: {e}")
+        
+        # Preguntar si desea añadir otra nota
+        continuar = rev_num("¿Desea añadir otra nota técnica? (1. Sí, 2. No): ")
+        if continuar != 1:
+            break
+
 def alm_imagenes():
-    id_paciente_imagen = rev_num("Ingrese el ID del paciente: ")
-    while True:
-        print("1. MRI\n2. CT\n3. Rayos X")
-        num_img = rev_num("Ingresa el tipo de imagen: ")
-        if 1 <= num_img <= 3:
-            tipo_imagen = ["MRI", "CT", "Rayos X"][num_img - 1]
-            break
-        else:
-            print("Seleccione un número válido entre 1 y 3.")
-    date=input("Ingresa la fecha de la imagen (YYYY-MM-DD): ")
-    fecha_imagen = rev_fecha(date)
-    resultado_IA_valor = rev_num("Ingresa el resultado preliminar del análisis por IA (en %): ")
-    resultado_IA = f"{resultado_IA_valor}%"
-    while True:
-        print("1. Digital\n2. Analógica\n3. 3D")
-        num_captura = rev_num("Ingresa el tipo de captura: ")
-        if 1 <= num_captura <= 3:
-            tipo_captura = ["Digital", "Analógica", "3D"][num_captura - 1]
-            break
-        else:
-            print("Seleccione un número válido entre 1 y 3.")
-    while True:
-        cont= rev_num("¿En la imagen se utilizó contraste?(1. Si 2. No): ")
-        if cont==1:
-            contraste="Si"
-            break
-        elif cont==2:
-            contraste="No"
-            break
-        else:
-            print("Ingrese una opcion valida")
-    posi = input("Describa cual fue el posicionamiento del paciente: ")
-    res_esp_valor = rango(0.01, 1.0, "Resolución espacial", "mm/píxel")
-    res_espa = f"{res_esp_valor} mm/píxel"
-    fre_muestreo_valor = rango(2, 15, "Frecuencia de muestreo", "MHz")
-    fre_muestreo = f"{fre_muestreo_valor} MHz"
-    zona_estudio = input("Ingresa la zona de estudio donde se realizo la imagen (alfabético, ej. Abdomen, Cabeza): ")
-    Alm_imagenes = {
-        "ID paciente": id_paciente_imagen,
-        "Tipo de imagen": tipo_imagen,
-        "Fecha de imagen": fecha_imagen,
-        "Resultado IA": resultado_IA,
-        "Información técnica": {
-            "Tipo captura": tipo_captura,
-            "Contraste": contraste,
-            "Posicionamiento": posi,
-            "Resolución espacial": res_espa,
-            "Frecuencia muestreo": fre_muestreo
-        },
-        "Zona de estudio": zona_estudio
-    }
-    db=con_mongodb()
-    imagenes_col=db["Imagenes"]
-    imagenes_col.insert_one(Alm_imagenes)
-    print("La imagen y los metadatos han sido almacenados correctamente.")
+    try:
+        # Confirmar el ID del paciente
+        while True:
+            paciente_id = rev_num("Ingrese el ID del paciente: ")
+            connection = con_db()
+            cursor = connection.cursor()
+            cursor.execute("SELECT paciente_id FROM pacientes WHERE paciente_id = %s", (paciente_id,))
+            if cursor.fetchone():
+                break
+            else:
+                print(f"El paciente con ID {paciente_id} no existe. Intente nuevamente.")
+                opcion = rev_num("¿Desea intentar con otro ID? (1. Si 2. No): ")
+                if opcion != 1:
+                    return
+
+        while True:
+            print("\nTipos de imagen:")
+            print("1. MRI\n2. CT\n3. Rayos X")
+            num_img = rev_num("Ingrese el tipo de imagen: ")
+            if 1 <= num_img <= 3:
+                tipo_imagen = ["MRI", "CT", "Rayos X"][num_img - 1]
+                break
+            else:
+                print("Seleccione un número válido entre 1 y 3.")
+
+        # Fecha de la imagen
+        date = input("Ingrese la fecha de la imagen (YYYY-MM-DD): ")
+        fecha_imagen = rev_fecha(date)
+
+        # Resultado preliminar IA
+        resultado_IA_valor = rev_num("Ingrese el resultado preliminar del análisis por IA (en %): ")
+        resultado_IA = f"{resultado_IA_valor}%"
+
+        # Tipo de captura
+        while True:
+            print("\nTipos de captura:")
+            print("1. Digital\n2. Analógica\n3. 3D")
+            num_captura = rev_num("Ingrese el tipo de captura: ")
+            if 1 <= num_captura <= 3:
+                tipo_captura = ["Digital", "Analógica", "3D"][num_captura - 1]
+                break
+            else:
+                print("Seleccione un número válido entre 1 y 3.")
+
+        # Contraste
+        while True:
+            cont = rev_num("¿Se utilizó contraste en la imagen? (1. Sí, 2. No): ")
+            if cont == 1:
+                contraste = "Sí"
+                break
+            elif cont == 2:
+                contraste = "No"
+                break
+            else:
+                print("Seleccione una opción válida (1 o 2).")
+
+        # Otros detalles técnicos
+        posi = input("Describa el posicionamiento del paciente: ")
+        res_esp_valor = rango(0.01, 1.0, "Resolución espacial", "mm/píxel")
+        res_espa = f"{res_esp_valor} mm/píxel"
+        fre_muestreo_valor = rango(2, 15, "Frecuencia de muestreo", "MHz")
+        fre_muestreo = f"{fre_muestreo_valor} MHz"
+        zona_estudio = input("Ingrese la zona de estudio donde se realizó la imagen (ej. Abdomen, Cabeza): ").capitalize()
+
+        # Almacenar en MongoDB
+        Alm_imagenes = {
+            "ID paciente": paciente_id,
+            "Tipo de imagen": tipo_imagen,
+            "Fecha de imagen": fecha_imagen,
+            "Resultado IA": resultado_IA,
+            "Información técnica": {
+                "Tipo captura": tipo_captura,
+                "Contraste": contraste,
+                "Posicionamiento": posi,
+                "Resolución espacial": res_espa,
+                "Frecuencia muestreo": fre_muestreo
+            },
+            "Zona de estudio": zona_estudio
+        }
+        db = con_mongodb()
+        imagenes_col = db["Imagenes"]
+        imagenes_col.insert_one(Alm_imagenes)
+        print("La imagen y los metadatos han sido almacenados correctamente.")
+
+    except Exception as e:
+        print(f"Ocurrió un error: {e}")
+    finally:
+        # Asegurar el cierre de la conexión a la base de datos
+        if 'connection' in locals() and connection:
+            connection.close()
+
 def ver_imagen():
     id_paciente_imagen = rev_num("Ingresa el ID del paciente para buscar imágenes: ")
     filtro = {"ID paciente": id_paciente_imagen}
@@ -1153,8 +1224,8 @@ def eliminar_imagen():
         print("\nImágenes encontradas:")
         for idx, imagen in enumerate(imagenes, start=1):
             print(f"{idx}. Tipo: {imagen.get('Tipo de imagen')}, Fecha: {imagen.get('Fecha de imagen')}")
-        confirmacion = input("¿Desea eliminar todas las imágenes asociadas a este ID? (Sí/No): ").strip().lower()
-        if confirmacion in ["sí", "si"]:
+        confirmacion = rev_num("¿Desea eliminar todas las imágenes asociadas a este ID? (1. Sí 2.No): ")
+        if confirmacion ==1:
             resultado = imagenes_col.delete_many(filtro)
             print(f"Se eliminaron {resultado.deleted_count} imagen(es).")
         else:
@@ -1230,7 +1301,7 @@ def iny_mongo():
                             "analisis_IA": {
                                 "condicion_sugerida": "Tumor cerebral",
                                 "probabilidad_%": 85,
-                                "notas": "Se observa una masa irregular en la región frontal."
+                                "notas_ia": "Se observa una masa irregular en la región frontal."
                             },
                             "comentarios_medico": "Se recomienda una biopsia para confirmar.",
                             "fecha_diagnostico": "2024-12-01",
@@ -1245,7 +1316,8 @@ def iny_mongo():
                         }
                     ],
                     "conclusiones": "Se requiere seguimiento.",
-                    "recomendaciones": "Consulta con neurocirugía."
+                    "recomendaciones": "Consulta con neurocirugía.",
+                    "notas_tecnicas":[]
                 },
                 {
                     "reporte_id": 2,
@@ -1260,7 +1332,7 @@ def iny_mongo():
                             "analisis_IA": {
                                 "condicion_sugerida": "Neumonía",
                                 "probabilidad_%": 70,
-                                "notas": "Hay signos de consolidación en los pulmones, compatible con neumonía bacteriana."
+                                "notas_ia": "Hay signos de consolidación en los pulmones, compatible con neumonía bacteriana."
                             },
                             "comentarios_medico": "Iniciar tratamiento con antibióticos.",
                             "fecha_diagnostico": "2024-12-05",
@@ -1275,7 +1347,8 @@ def iny_mongo():
                         }
                     ],
                     "conclusiones": "Condición tratable.",
-                    "recomendaciones": "Monitorización diaria."
+                    "recomendaciones": "Monitorización diaria.",
+                    "notas_tecnicas":[]
                 }
             ],
             "Imagenes": [
